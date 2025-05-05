@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<AnchorPane prefHeight="500.0" prefWidth="800.0" style="-fx-padding: 20;" xmlns="http://javafx.com/javafx/17.0.12" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.clientfx.gui.EmployeeController">
+
+  <Label layoutX="20" layoutY="20" style="-fx-font-size: 24px; -fx-font-weight: bold;" text="Employee Management" />
+
+  <TableView fx:id="employeeTable" layoutX="20" layoutY="60" prefHeight="300" prefWidth="489.0">
+    <columns>
+      <TableColumn fx:id="nameColumn" prefWidth="238.9999885559082" text="Name" />
+      <TableColumn fx:id="emailColumn" prefWidth="249.79998779296875" text="Email" />
+    </columns>
+  </TableView>
+
+  <GridPane hgap="10" layoutX="20" layoutY="370" vgap="10">
+    <Label text="Name:" GridPane.columnIndex="0" GridPane.rowIndex="0" />
+    <TextField fx:id="nameField" prefWidth="200" GridPane.columnIndex="1" GridPane.rowIndex="0" />
+
+    <Label text="Email:" GridPane.columnIndex="0" GridPane.rowIndex="1" />
+    <TextField fx:id="emailField" GridPane.columnIndex="1" GridPane.rowIndex="1" />
+
+    <Label text="Password:" GridPane.columnIndex="0" GridPane.rowIndex="2" />
+    <PasswordField fx:id="passwordField" GridPane.columnIndex="1" GridPane.rowIndex="2" />
+    <columnConstraints>
+      <ColumnConstraints />
+      <ColumnConstraints />
+    </columnConstraints>
+    <rowConstraints>
+      <RowConstraints />
+      <RowConstraints />
+      <RowConstraints />
+    </rowConstraints>
+  </GridPane>
+
+  <HBox layoutX="20.0" layoutY="481.0" prefHeight="26.0" prefWidth="225.0" spacing="10">
+    <Button fx:id="addButton" onAction="#handleAddEmployee" text="Add" />
+    <Button fx:id="deleteButton" onAction="#handleDeleteEmployee" text="Delete" />
+      <Button fx:id="handleUpdateEmployee" mnemonicParsing="false" text="Update" />
+    <Button fx:id="clearButton" onAction="#handleClearFields" text="Clear" />
+  </HBox>
+
+  <Label fx:id="statusLabel" layoutX="20" layoutY="520" />
+</AnchorPane>
