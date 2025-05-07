@@ -3,6 +3,7 @@ module com.clientfx {
     requires javafx.fxml;
     requires com.model;
 
+    requires MPP.project.Networking.main;
     requires org.controlsfx.controls;
     requires com.dlsc.formsfx;
     requires org.kordamp.bootstrapfx.core;

@@ -14,9 +14,9 @@ public class JdbcUtils {
 
     private static Connection instance = null;
 
-    private Connection getNewConnection() {
-        String driver = props.getProperty("sqlite.jdbc.driver");
-        String url = props.getProperty("sqlite.jdbc.url");
+    private Connection getNewConnecation() {
+        String driver = props.getProperty("jdbc.driver");
+        String url = props.getProperty("jdbc.url");
 
         Connection con = null;
         try {
@@ -34,7 +34,7 @@ public class JdbcUtils {
     public Connection getConnection() {
         try {
             if (instance == null || instance.isClosed()) {
-
+                instance = getNewConnecation();
             }
         } catch (SQLException e) {
             System.out.println("Error DB " + e);

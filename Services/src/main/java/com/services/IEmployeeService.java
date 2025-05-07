@@ -5,6 +5,8 @@ import com.model.Employee;
 import java.util.List;
 
 public interface IEmployeeService {
+    void addObserver(IObserver<Employee, String> observer) throws ServicesException;
+
     void addEmployee(Employee employee) throws ServicesException;
     void deleteEmployee(String email) throws ServicesException;
     void updateEmployee(String email, Employee employee) throws ServicesException;

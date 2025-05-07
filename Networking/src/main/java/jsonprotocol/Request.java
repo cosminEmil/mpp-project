@@ -3,8 +3,6 @@ package jsonprotocol;
 import dto.EmployeeDTO;
 
 public class Request {
-    //TODO: DO THE REQUEST CLASS
-
     private RequestType type;
     private EmployeeDTO employee;
 

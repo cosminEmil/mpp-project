@@ -2,6 +2,7 @@ package com.server;
 
 import com.model.Employee;
 import com.persistence.EmployeeRepository;
+import com.persistence.repository.mock.EmployeeRepositoryMock;
 import com.services.IEmployeeService;
 import com.services.IObserver;
 import com.services.ServicesException;
@@ -9,7 +10,7 @@ import com.services.ServicesException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class EmployeeServiceImpl implements IEmployeeService {
+public class EmployeeServiceImpl implements IEmployeeService, IObserver<Employee, String> {
     private final EmployeeRepository employeeRepository;
     private final List<IObserver<Employee, String>> observers = new ArrayList<>();
 
@@ -17,28 +18,20 @@ public class EmployeeServiceImpl implements IEmployeeService {
         this.employeeRepository = employeeRepository;
     }
 
-    // ClientController sau ClientWorker adauga un observer
+    @Override
     public void addObserver(IObserver<Employee, String> observer) {
         observers.add(observer);
-    }
-
-    // Helper pentru notificare
-    private void notifyObservers(Employee employee, String operationType) {
-        for (IObserver<Employee, String> observer : observers) {
-            observer.notifyCrudOperation(employee, operationType);
-        }
     }
 
     @Override
     public void addEmployee(Employee employee) throws ServicesException {
         try {
-            // Check if employee already exists
             if (employeeRepository.findBy(employee.getEmail()) != null) {
                 throw new ServicesException("Employee with email " + employee.getEmail() + " already exists");
             }
 
             employeeRepository.save(employee);
-            notifyObservers(employee, "ADD");
+            notifyAdd(employee);
         } catch (Exception e) {
             throw new ServicesException("Failed to add employee: " + e.getMessage(), e);
         }
@@ -53,7 +46,7 @@ public class EmployeeServiceImpl implements IEmployeeService {
             }
 
             employeeRepository.delete(email);
-            notifyObservers(employee, "DELETE");
+            notifyDelete(email);
         } catch (Exception e) {
             throw new ServicesException("Failed to delete employee: " + e.getMessage(), e);
         }
@@ -62,12 +55,10 @@ public class EmployeeServiceImpl implements IEmployeeService {
     @Override
     public void updateEmployee(String email, Employee employee) throws ServicesException {
         try {
-            // Verify the employee exists
             if (employeeRepository.findBy(email) == null) {
                 throw new ServicesException("Employee with email " + email + " not found");
             }
 
-            // Verify the update doesn't conflict with existing emails
             if (!email.equals(employee.getEmail())) {
                 if (employeeRepository.findBy(employee.getEmail()) != null) {
                     throw new ServicesException("New email already exists");
@@ -75,47 +66,39 @@ public class EmployeeServiceImpl implements IEmployeeService {
             }
 
             employeeRepository.update(email, employee);
-            notifyObservers(employee, "UPDATE");
+            notifyDelete(email);
         } catch (Exception e) {
             throw new ServicesException("Failed to update employee: " + e.getMessage(), e);
         }
     }
-    /*
-    @Override
-    public Employee findEmployeeByEmail(String email) throws ServicesException {
-        try {
-            Employee employee = employeeRepository.findBy(email);
-            if (employee == null) {
-                throw new ServicesException("Employee not found");
+
+    public void notifyAdd(Employee employee) {
+        for (IObserver<Employee, String> observer : observers) {
+            try {
+                observer.notifyAdd(employee);
+            } catch (ServicesException e) {
+                System.err.println("Error notifying observer: " + e.getMessage());
             }
-            return employee;
-        } catch (Exception e) {
-            throw new ServicesException("Failed to find employee: " + e.getMessage(), e);
         }
     }
 
-    @Override
-    public Employee findEmployeeByNameAndEmail(String name, String email) throws ServicesException {
-        try {
-            Employee employee = employeeRepository.findBy(name, email);
-            if (employee == null) {
-                throw new ServicesException("Employee not found");
+    public void notifyUpdate(Employee employee, String oldEmail) {
+        for (IObserver<Employee, String> observer : observers) {
+            try {
+                observer.notifyUpdate(employee, oldEmail);
+            } catch (ServicesException e) {
+                System.err.println("Error notifying observer: " + e.getMessage());
             }
-            return employee;
-        } catch (Exception e) {
-            throw new ServicesException("Failed to find employee: " + e.getMessage(), e);
         }
     }
 
-    @Override
-    public List<Employee> getAllEmployees() throws ServicesException {
-        try {
-            List<Employee> employees = (List<Employee>) employeeRepository.getAll();
-            return employees;
-        } catch (Exception e) {
-            throw new ServicesException("Failed to get all employees: " + e.getMessage(), e);
+    public void notifyDelete(String email) {
+        for (IObserver<Employee, String> observer : observers) {
+            try {
+                observer.notifyDelete(email);
+            } catch (ServicesException e) {
+                System.err.println("Error notifying observer: " + e.getMessage());
+            }
         }
     }
-
-     */
 }

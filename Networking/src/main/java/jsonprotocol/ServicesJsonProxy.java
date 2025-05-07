@@ -14,6 +14,8 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import com.google.gson.Gson;
+import dto.DTOUtils;
+import dto.EmployeeDTO;
 
 public class ServicesJsonProxy implements IEmployeeService {
     private final String host;
@@ -35,13 +37,7 @@ public class ServicesJsonProxy implements IEmployeeService {
         responses = new LinkedBlockingQueue<Response>();
     }
 
-    @Override
-    public void addEmployee(Employee employee) throws ServicesException {
-        initializeConnection();
-    }
-
-    private void initializeConnection() {
-
+    private void initializeConnection() throws ServicesException {
         try {
             gsonFormatter = new Gson();
             connection = new Socket(host, port);
@@ -51,7 +47,17 @@ public class ServicesJsonProxy implements IEmployeeService {
             finished = false;
             startReader();
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new ServicesException("Connection error: " + e.getMessage());
+        }
+    }
+
+    private void sendRequest(Request request) throws ServicesException {
+        String reqLine = gsonFormatter.toJson(request);
+        try {
+            output.println(reqLine);
+            output.flush();
+        } catch (Exception e) {
+            throw new ServicesException("Error sending request: " + e.getMessage());
         }
     }
 
@@ -60,41 +66,134 @@ public class ServicesJsonProxy implements IEmployeeService {
         tw.start();
     }
 
+
+    @Override
+    public void addObserver(IObserver<Employee, String> observer) throws ServicesException {
+        if (observer == null) {
+            throw new ServicesException("Observer cannot be null");
+        }
+        this.client = observer;
+    }
+
+    private void checkConnection() throws ServicesException {
+        if (connection == null || connection.isClosed() || !connection.isConnected()) {
+            initializeConnection();
+        }
+    }
+
+    @Override
+    public void addEmployee(Employee employee) throws ServicesException {
+        checkConnection();
+        Request req = JsonProtocolUtils.createAddRequest(employee);
+        sendRequest(req);
+        Response response = readResponse();
+        if (response.getType() == ResponseType.ERROR) {
+            String err = response.getErrorMessage();
+            throw new ServicesException(err);
+        }
+    }
+
     @Override
     public void deleteEmployee(String email) throws ServicesException {
-
+        // Presupunem că Employee are un constructor care primește doar email
+        checkConnection();
+        Request req = JsonProtocolUtils.createDeleteRequest(new Employee(email));
+        sendRequest(req);
+        Response response = readResponse();
+        if (response.getType() == ResponseType.ERROR) {
+            String err = response.getErrorMessage();
+            throw new ServicesException(err);
+        }
     }
 
     @Override
     public void updateEmployee(String email, Employee employee) throws ServicesException {
+        checkConnection();
+        Request req = JsonProtocolUtils.createUpdateRequest(employee);
+        sendRequest(req);
+        Response response = readResponse();
+        if (response.getType() == ResponseType.ERROR) {
+            String err = response.getErrorMessage();
+            throw new ServicesException(err);
+        }
+    }
 
+    private Response readResponse() throws ServicesException {
+        try {
+            return responses.take();
+        } catch (InterruptedException e) {
+            throw new ServicesException("Error reading response: " + e.getMessage());
+        }
     }
 
     private boolean isUpdate(Response response) {
-        return response.getType() == ResponseType.EMPLOYEE_ADDED || response.getType() == ResponseType.EMPLOYEE_UPDATED
+        return response.getType() == ResponseType.EMPLOYEE_ADDED ||
+                response.getType() == ResponseType.EMPLOYEE_UPDATED ||
+                response.getType() == ResponseType.EMPLOYEE_DELETED;
+    }
+
+    private void handleUpdate(Response response) {
+        EmployeeDTO employeeDTO = response.getEmployee();
+        Employee employee = DTOUtils.getFromDTO(employeeDTO);
+        switch (response.getType()) {
+            case EMPLOYEE_ADDED:
+                try {
+                    client.notifyAdd(employee);
+                } catch (ServicesException e) {
+                    System.err.println("Error notifying addition: " + e.getMessage());
+                }
+                break;
+            case EMPLOYEE_UPDATED:
+                try {
+                    client.notifyUpdate(employee, employee.getEmail());
+                } catch (ServicesException e) {
+                    System.err.println("Error notifying update: " + e.getMessage());
+                }
+                break;
+            case EMPLOYEE_DELETED:
+                try {
+                    client.notifyDelete(employee.getEmail());
+                } catch (ServicesException e) {
+                    System.err.println("Error notifying delete: " + e.getMessage());
+                }
+        }
     }
 
     private class ReaderThread implements Runnable {
         @Override
         public void run() {
-            while(!finished) {
+            while (!finished) {
                 try {
+                    // TODO: Verifica daca serverul trimite coret mesaje si daca clientul le proceseaza
                     String responseLine = input.readLine();
-                    System.out.println("response received" + responseLine);
+                    if (responseLine == null) {
+                        System.out.println("Server closed connection.");
+                        break;
+                    }
+                    System.out.println("Response received: " + responseLine);
                     Response response = gsonFormatter.fromJson(responseLine, Response.class);
                     if (isUpdate(response)) {
-                        handleResponse(response);
+                        handleUpdate(response);
                     } else {
-                        try {
-                            responses.put(response);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
+                        responses.put(response);
                     }
-                } catch (IOException e) {
-                    System.out.println("Reading error" + e);
+                } catch (IOException | InterruptedException e) {
+                    System.err.println("Reading error: " + e.getMessage());
+                    break;
                 }
             }
+        }
+    }
+
+    public void closeConnection() {
+        finished = true;
+        try {
+            if (input != null) input.close();
+            if (output != null) output.close();
+            if (connection != null) connection.close();
+            client = null;
+        } catch (IOException e) {
+            System.err.println("Error closing connection: " + e.getMessage());
         }
     }
 }
