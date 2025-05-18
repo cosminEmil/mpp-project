@@ -19,6 +19,10 @@ public class EmployeeDTO implements Serializable {
         this.password = password;
     }
 
+    public EmployeeDTO() {
+
+    }
+
     public String getPassword() {
         return password;
     }

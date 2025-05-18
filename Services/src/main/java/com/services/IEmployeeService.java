@@ -8,10 +8,10 @@ public interface IEmployeeService {
     void addObserver(IObserver<Employee, String> observer) throws ServicesException;
 
     void addEmployee(Employee employee) throws ServicesException;
-    void deleteEmployee(String email) throws ServicesException;
+    void deleteEmployee(Employee employee) throws ServicesException;
     void updateEmployee(String email, Employee employee) throws ServicesException;
     //Employee findEmployeeByEmail(String email) throws ServicesException;
     //Employee findEmployeeByNameAndEmail(String name, String email) throws ServicesException;
-    //List<Employee> getAllEmployees() throws ServicesException;
+    List<Employee> getAllEmployees() throws ServicesException;
     // other specific methods
 }

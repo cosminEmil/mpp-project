@@ -8,9 +8,9 @@ import jsonprotocol.ClientJsonWorker;
 import java.net.Socket;
 
 public class JsonConcurrentServer extends AbsConcurrentServer {
-    private IObserver<Employee, String> employeeServer;
+    private IEmployeeService employeeServer;
 
-    public JsonConcurrentServer(int port, IObserver<Employee, String> employeeServer) {
+    public JsonConcurrentServer(int port, IEmployeeService employeeServer) {
         super(port);
         this.employeeServer = employeeServer;
         System.out.println("Employee- JsonConcurrentServer");
@@ -18,7 +18,7 @@ public class JsonConcurrentServer extends AbsConcurrentServer {
 
     @Override
     protected Thread createWorker(Socket client) {
-        ClientJsonWorker worker = new ClientJsonWorker(client, employeeServer);
+        ClientJsonWorker worker = new ClientJsonWorker(employeeServer, client);
         employeeServer.addObserver(worker);
         Thread tw = new Thread(worker);
         return tw;

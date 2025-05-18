@@ -2,7 +2,6 @@ package com.clientfx;
 
 import com.clientfx.gui.EmployeeController;
 import com.services.IEmployeeService;
-import com.services.ServicesException;
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
@@ -22,9 +21,7 @@ public class StartJsonClientFX extends Application {
         System.out.println("In start");
         Properties clientProps = new Properties();
         try {
-            clientProps.load(StartJsonClientFX.class.getResourceAsStream("/client.properties"));
-            System.out.println("Client properties set. ");
-            clientProps.list(System.out);
+            clientProps.load(StartJsonClientFX.class.getClassLoader().getResourceAsStream("client.properties"));
         } catch (IOException e) {
             System.err.println("Cannot find client.properties " + e);
             return;
@@ -44,19 +41,15 @@ public class StartJsonClientFX extends Application {
 
         IEmployeeService server = new ServicesJsonProxy(serverIP, serverPort);
 
-        FXMLLoader fxmlLoader = new FXMLLoader(StartJsonClientFX.class.getResource("employee.fxml"));
+        FXMLLoader fxmlLoader = new FXMLLoader(StartJsonClientFX.class.getClassLoader().getResource("employee.fxml"));
         Parent root = fxmlLoader.load();
 
         EmployeeController employeeController = fxmlLoader.getController();
         employeeController.setServer(server);
 
 
-        Scene scene = new Scene(root, 320, 240);
+        Scene scene = new Scene(root, 800, 700);
         stage.setScene(scene);
         stage.show();
-    }
-
-    public static void main(String[] args) {
-        launch();
     }
 }

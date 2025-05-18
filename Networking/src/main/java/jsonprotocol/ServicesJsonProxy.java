@@ -10,6 +10,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -87,6 +89,9 @@ public class ServicesJsonProxy implements IEmployeeService {
         Request req = JsonProtocolUtils.createAddRequest(employee);
         sendRequest(req);
         Response response = readResponse();
+        if (response.getType() == ResponseType.EMPLOYEE_ADDED) {
+
+        }
         if (response.getType() == ResponseType.ERROR) {
             String err = response.getErrorMessage();
             throw new ServicesException(err);
@@ -94,15 +99,18 @@ public class ServicesJsonProxy implements IEmployeeService {
     }
 
     @Override
-    public void deleteEmployee(String email) throws ServicesException {
+    public void deleteEmployee(Employee employee) throws ServicesException {
         // Presupunem că Employee are un constructor care primește doar email
         checkConnection();
-        Request req = JsonProtocolUtils.createDeleteRequest(new Employee(email));
+        Request req = JsonProtocolUtils.createDeleteRequest(employee);
         sendRequest(req);
         Response response = readResponse();
         if (response.getType() == ResponseType.ERROR) {
             String err = response.getErrorMessage();
             throw new ServicesException(err);
+        }
+        if (response.getType() == ResponseType.EMPLOYEE_DELETED) {
+            System.out.println("Employee successfully deleted.");
         }
     }
 
@@ -118,6 +126,26 @@ public class ServicesJsonProxy implements IEmployeeService {
         }
     }
 
+    @Override
+    public List<Employee> getAllEmployees() throws ServicesException {
+        checkConnection();
+        Request request = new Request();
+        request.setType(RequestType.GET_ALL_EMPLOYEES);
+        sendRequest(request);
+
+        Response response = readResponse();
+        if (response.getType() == ResponseType.ERROR) {
+            throw new ServicesException(response.getErrorMessage());
+        }
+
+        List<EmployeeDTO> employeeDTOs = response.getEmployees();
+        List<Employee> employees = new ArrayList<>();
+        for (EmployeeDTO dto : employeeDTOs) {
+            employees.add(DTOUtils.getFromDTO(dto));
+        }
+
+        return employees;
+    }
     private Response readResponse() throws ServicesException {
         try {
             return responses.take();
@@ -133,67 +161,78 @@ public class ServicesJsonProxy implements IEmployeeService {
     }
 
     private void handleUpdate(Response response) {
-        EmployeeDTO employeeDTO = response.getEmployee();
-        Employee employee = DTOUtils.getFromDTO(employeeDTO);
-        switch (response.getType()) {
-            case EMPLOYEE_ADDED:
+        // Verifică dacă răspunsul conține un obiect employeeDTO
+        if (response.getEmployee() != null) {
+            EmployeeDTO employeeDTO = response.getEmployee();
+            Employee employee = DTOUtils.getFromDTO(employeeDTO);
+            switch (response.getType()) {
+                case EMPLOYEE_ADDED:
+                    try {
+                        client.notifyAdd(employee);
+                    } catch (ServicesException e) {
+                        System.err.println("Error notifying addition: " + e.getMessage());
+                    }
+                    break;
+                case EMPLOYEE_UPDATED:
+                    try {
+                        client.notifyUpdate(employee, employee.getEmail());
+                    } catch (ServicesException e) {
+                        System.err.println("Error notifying update: " + e.getMessage());
+                    }
+                    break;
+                case EMPLOYEE_DELETED:
+                    // În cazul unei ștergeri, nu mai avem obiectul employee, doar email-ul
+                    String email = response.getEmployeeEmail();  // Asigură-te că ai metoda getEmployeeEmail()
+                    try {
+                        client.notifyDelete(email);  // Trimite doar email-ul
+                    } catch (ServicesException e) {
+                        System.err.println("Error notifying delete: " + e.getMessage());
+                    }
+                    break;
+            }
+        } else {
+            // Dacă răspunsul nu conține employeeDTO, dar este de tip EMPLOYEE_DELETED
+            if (response.getType() == ResponseType.EMPLOYEE_DELETED) {
+                // Aici presupunem că răspunsul conține doar email-ul angajatului șters
+                String email = response.getEmployeeEmail(); // presupunem că există un asemenea câmp
                 try {
-                    client.notifyAdd(employee);
-                } catch (ServicesException e) {
-                    System.err.println("Error notifying addition: " + e.getMessage());
-                }
-                break;
-            case EMPLOYEE_UPDATED:
-                try {
-                    client.notifyUpdate(employee, employee.getEmail());
-                } catch (ServicesException e) {
-                    System.err.println("Error notifying update: " + e.getMessage());
-                }
-                break;
-            case EMPLOYEE_DELETED:
-                try {
-                    client.notifyDelete(employee.getEmail());
+                    client.notifyDelete(email);
                 } catch (ServicesException e) {
                     System.err.println("Error notifying delete: " + e.getMessage());
                 }
+            }
         }
     }
+
 
     private class ReaderThread implements Runnable {
         @Override
         public void run() {
             while (!finished) {
                 try {
-                    // TODO: Verifica daca serverul trimite coret mesaje si daca clientul le proceseaza
                     String responseLine = input.readLine();
                     if (responseLine == null) {
                         System.out.println("Server closed connection.");
                         break;
                     }
-                    System.out.println("Response received: " + responseLine);
+                    System.out.println("[CLIENT] Response received: " + responseLine);
+
                     Response response = gsonFormatter.fromJson(responseLine, Response.class);
+                    System.out.println("[CLIENT] Parsed response type: " + response.getType());
+
                     if (isUpdate(response)) {
+                        System.out.println("[CLIENT] Handling update...");
                         handleUpdate(response);
                     } else {
+                        System.out.println("[CLIENT] Handling direct response...");
                         responses.put(response);
                     }
+
                 } catch (IOException | InterruptedException e) {
-                    System.err.println("Reading error: " + e.getMessage());
+                    System.err.println("[CLIENT] Reading error: " + e.getMessage());
                     break;
                 }
             }
-        }
-    }
-
-    public void closeConnection() {
-        finished = true;
-        try {
-            if (input != null) input.close();
-            if (output != null) output.close();
-            if (connection != null) connection.close();
-            client = null;
-        } catch (IOException e) {
-            System.err.println("Error closing connection: " + e.getMessage());
         }
     }
 }

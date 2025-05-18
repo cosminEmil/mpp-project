@@ -40,7 +40,13 @@ public class EmployeeController implements Initializable, IObserver<Employee, St
 
     public void setServer(IEmployeeService s) {
         server = s;
-        // Initialize table data when server is set
+        try {
+            if (server != null) {
+                server.addObserver(this); // Înregistrează-te ca observer
+            }
+        } catch (ServicesException e) {
+            showError("Failed to register as observer: " + e.getMessage());
+        }
         loadEmployeeData();
     }
 
@@ -61,21 +67,14 @@ public class EmployeeController implements Initializable, IObserver<Employee, St
 
     private void loadEmployeeData() {
         try {
-            // Clear existing data
             employeeData.clear();
-
-            // Get all employees from server (you'll need to implement getAllEmployees in your service)
-            // employeeData.addAll(server.getAllEmployees());
-
-            // For now, we'll just add some dummy data
-            employeeData.add(new Employee("John Doe", "john@example.com", "password123"));
-            employeeData.add(new Employee("Jane Smith", "jane@example.com", "securepass"));
-
+            employeeData.addAll(server.getAllEmployees());
             employeeTable.setItems(employeeData);
         } catch (Exception e) {
             showError("Error loading employee data: " + e.getMessage());
         }
     }
+
 
     private void showEmployeeDetails(Employee employee) {
         if (employee != null) {
@@ -142,14 +141,16 @@ public class EmployeeController implements Initializable, IObserver<Employee, St
 
     @FXML
     public void handleDeleteEmployee() {
-        if (currentEmployee == null) {
+        Employee selected = employeeTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
             showError("No employee selected!");
             return;
         }
 
-        try {
-            server.deleteEmployee(currentEmployee.getEmail());
+        System.out.println("Deleting: " + selected.getName() + ", " + selected.getEmail());
 
+        try {
+            server.deleteEmployee(selected);  // Trimit întregul obiect
             statusLabel.setText("Employee deleted successfully!");
             statusLabel.setStyle("-fx-text-fill: green;");
             clearFields();
@@ -157,6 +158,7 @@ public class EmployeeController implements Initializable, IObserver<Employee, St
             showError("Error deleting employee: " + e.getMessage());
         }
     }
+
 
     @FXML
     public void handleClearFields() {
@@ -203,11 +205,13 @@ public class EmployeeController implements Initializable, IObserver<Employee, St
     @Override
     public void notifyDelete(String ID) throws ServicesException {
         Platform.runLater(() -> {
-            employeeData.removeIf(e -> e.getEmail().equals(ID));
+            // Actualizează UI-ul pentru a elimina angajatul din tabelă
+            employeeData.removeIf(e -> e.getEmail().equals(ID));  // Verifică dacă email-ul este corect
             statusLabel.setText("Employee deleted: " + ID);
             statusLabel.setStyle("-fx-text-fill: green;");
         });
     }
+
 
     @Override
     public void addObserver(IObserver<Employee, String> observer) throws ServicesException {

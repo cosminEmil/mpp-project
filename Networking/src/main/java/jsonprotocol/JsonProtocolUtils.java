@@ -2,6 +2,7 @@ package jsonprotocol;
 
 import com.model.Employee;
 import dto.DTOUtils;
+import dto.EmployeeDTO;
 
 public class JsonProtocolUtils {
     public static Request createAddRequest(Employee employee) {
@@ -21,9 +22,11 @@ public class JsonProtocolUtils {
     public static Request createDeleteRequest(Employee employee) {
         Request req = new Request();
         req.setType(RequestType.DELETE_EMPLOYEE);
-        req.setEmployee(DTOUtils.getDTO(employee));
+        req.setEmployee(DTOUtils.getDTO(employee));  // trimite DTO-ul complet
         return req;
     }
+
+
 
     public static Response createOkResponse() {
         Response resp = new Response();

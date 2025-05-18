@@ -26,7 +26,7 @@ tasks.withType(JavaCompile) {
 
 application {
   mainModule = 'com.clientfx'
-  mainClass = 'com.clientfx.HelloApplication'
+  mainClass = 'com.clientfx.StartJsonClientFX'
 }
 
 javafx {

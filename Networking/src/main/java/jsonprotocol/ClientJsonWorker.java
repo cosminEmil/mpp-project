@@ -1,6 +1,7 @@
 package jsonprotocol;
 
 import com.model.Employee;
+import com.services.IEmployeeService;
 import com.services.IObserver;
 import com.services.ServicesException;
 
@@ -9,26 +10,28 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import com.google.gson.Gson;
 import dto.DTOUtils;
+import dto.EmployeeDTO;
 
 public class ClientJsonWorker implements Runnable, IObserver<Employee, String> {
+    private final IEmployeeService server;
     private final Socket connection;
-    private final IObserver<Employee, String> clientObserver;
+
+    private IObserver<Employee, String> clientObserver;
     private BufferedReader input;
     private PrintWriter output;
     private final Gson gsonFormatter;
-    private volatile boolean connected;
     private final BlockingQueue<IObserver<Employee, String>> observers = new LinkedBlockingQueue<>();
 
-    public ClientJsonWorker(Socket connection, IObserver<Employee, String> clientObserver) {
+    public ClientJsonWorker(IEmployeeService server, Socket connection) {
+        this.server = server;
         this.connection = connection;
-        this.clientObserver = clientObserver;
         this.gsonFormatter = new Gson();
-        this.connected = true;
         try {
             this.output = new PrintWriter(connection.getOutputStream());
             this.input = new BufferedReader(new InputStreamReader(connection.getInputStream()));
@@ -39,18 +42,21 @@ public class ClientJsonWorker implements Runnable, IObserver<Employee, String> {
 
     @Override
     public void run() {
-        while (connected) {
+        while (true) {
             try {
                 String responseLine = input.readLine();
                 if (responseLine == null) {
                     System.out.println("Server disconnected");
                     break;
                 }
-                System.out.println("Received response: " + responseLine);
-                Request response = gsonFormatter.fromJson(responseLine, Request.class);
-                handleRequest(response);
-                //TODO: Verifica daca responseLine ul contine ResponseType ul si daca numele
-                // TODO: numele variabilei
+                System.out.println("Received request: " + responseLine);
+                Request request = gsonFormatter.fromJson(responseLine, Request.class);
+                Response response = handleRequest(request);
+
+                if (response != null) {
+                    sendResponse(response);
+                }
+
             } catch (IOException e) {
                 System.err.println("Reading error in worker: " + e.getMessage());
                 break;
@@ -62,33 +68,6 @@ public class ClientJsonWorker implements Runnable, IObserver<Employee, String> {
             connection.close();
         } catch (IOException e) {
             System.err.println("Error closing worker connection: " + e.getMessage());
-        }
-    }
-
-    private void handleResponse(Response response) {
-        if (response.getType() == ResponseType.EMPLOYEE_ADDED) {
-            Employee employee = DTOUtils.getFromDTO(response.getEmployee());
-            try {
-                notifyAdd(employee);
-                for (IObserver<Employee, String> observer : observers) {
-                    observer.notifyAdd(employee);
-                }
-            } catch (ServicesException e) {
-                System.err.println("Error notifying addition: " + e.getMessage());
-            }
-        } else if (response.getType() == ResponseType.EMPLOYEE_UPDATED) {
-            Employee employee = DTOUtils.getFromDTO(response.getEmployee());
-            try {
-                notifyUpdate(employee, employee.getEmail());
-            } catch (ServicesException e) {
-                System.err.println("Error notifying update: " + e.getMessage());
-            }
-        } else if (response.getType() == ResponseType.EMPLOYEE_DELETED) {
-            try {
-                notifyDelete(response.getEmployee().getEmail());
-            } catch (ServicesException e) {
-                System.err.println("Error notifying deletion: " + e.getMessage());
-            }
         }
     }
 
@@ -104,20 +83,25 @@ public class ClientJsonWorker implements Runnable, IObserver<Employee, String> {
     @Override
     public void notifyUpdate(Employee entity, String ID) throws ServicesException {
         System.out.println("Employee updated: " + entity);
-        clientObserver.notifyUpdate(entity, ID);
-        for (IObserver<Employee, String> observer : observers) {
-            observer.notifyUpdate(entity, ID);
-        }
+
+        Response response = new Response();
+        response.setType(ResponseType.EMPLOYEE_UPDATED);
+        response.setEmployee(DTOUtils.getDTO(entity));
+        sendResponse(response);
     }
 
+
     @Override
-    public void notifyDelete(String ID) throws ServicesException {
-        System.out.println("Employee deleted with ID: " + ID);
-        clientObserver.notifyDelete(ID);
-        for (IObserver<Employee, String> observer : observers) {
-            observer.notifyDelete(ID);
-        }
+    public void notifyDelete(String email) throws ServicesException {
+        System.out.println("Employee deleted with email: " + email);
+
+        Response response = new Response();
+        response.setType(ResponseType.EMPLOYEE_DELETED);
+        System.out.println("Email sent in the response: " + email);
+        response.setEmployeeEmail(email);
+        sendResponse(response);
     }
+
 
     @Override
     public void addObserver(IObserver<Employee, String> observer) throws ServicesException {
@@ -127,24 +111,68 @@ public class ClientJsonWorker implements Runnable, IObserver<Employee, String> {
         observers.add(observer);
     }
 
+    private static final Response okResponse = JsonProtocolUtils.createOkResponse();
+
+    private Response handleRequest(Request request) {
+        switch (request.getType()) {
+            case RequestType.ADD_EMPLOYEE:
+                System.out.println("Add request ... " + request.getType());
+                EmployeeDTO employeeDTO = request.getEmployee();
+                Employee employee = DTOUtils.getFromDTO(employeeDTO);
+                try {
+                    server.addEmployee(employee);
+                    return okResponse;
+                } catch (ServicesException e) {
+                    return JsonProtocolUtils.createErrorResponse(e.getMessage());
+                }
+
+            case RequestType.UPDATE_EMPLOYEE:
+                System.out.println("Update request ... " + request.getType());
+                EmployeeDTO employeeDTO1 = request.getEmployee();
+                Employee employee1 = DTOUtils.getFromDTO(employeeDTO1);
+
+                try {
+                    server.updateEmployee(employee1.getEmail(), employee1);
+                    return okResponse;
+                } catch (ServicesException e) {
+                    return JsonProtocolUtils.createErrorResponse(e.getMessage());
+                }
+            case RequestType.DELETE_EMPLOYEE:
+                System.out.println("Delete request ... " + request.getType());
+                EmployeeDTO employeeDTO2 = request.getEmployee();
+                Employee employee2 = DTOUtils.getFromDTO(employeeDTO2);
+
+                try {
+                    server.deleteEmployee(employee2);
+                    return okResponse;
+                } catch (ServicesException e) {
+                    return JsonProtocolUtils.createErrorResponse(e.getMessage());
+                }
+            case GET_ALL_EMPLOYEES:
+                try {
+                    List<Employee> all = server.getAllEmployees();
+                    List<EmployeeDTO> dtos = all.stream().map(DTOUtils::getDTO).toList();
+
+                    Response resp = new Response();
+                    resp.setType(ResponseType.OK);
+                    resp.setEmployees(dtos);
+                    return resp;
+                } catch (ServicesException e) {
+                    return JsonProtocolUtils.createErrorResponse(e.getMessage());
+                }
+
+        }
+        return null;
+    }
+
     public void sendResponse(Response response) throws ServicesException {
         String respLine = gsonFormatter.toJson(response);
-        try {
+        System.out.println("Sending response " + respLine);
+        synchronized (output) {
             output.println(respLine);
             output.flush();
-        } catch (Exception e) {
-            throw new ServicesException("Error sending response: " + e.getMessage());
         }
     }
 
-    public void stop() {
-        connected = false;
-        try {
-            if (input != null) input.close();
-            if (output != null) output.close();
-            if (connection != null) connection.close();
-        } catch (IOException e) {
-            System.err.println("Error closing worker resources: " + e.getMessage());
-        }
-    }
+
 }

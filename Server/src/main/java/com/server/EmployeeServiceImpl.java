@@ -2,7 +2,6 @@ package com.server;
 
 import com.model.Employee;
 import com.persistence.EmployeeRepository;
-import com.persistence.repository.mock.EmployeeRepositoryMock;
 import com.services.IEmployeeService;
 import com.services.IObserver;
 import com.services.ServicesException;
@@ -38,19 +37,18 @@ public class EmployeeServiceImpl implements IEmployeeService, IObserver<Employee
     }
 
     @Override
-    public void deleteEmployee(String email) throws ServicesException {
-        try {
-            Employee employee = employeeRepository.findBy(email);
-            if (employee == null) {
-                throw new ServicesException("Employee with email " + email + " not found");
-            }
-
-            employeeRepository.delete(email);
-            notifyDelete(email);
-        } catch (Exception e) {
-            throw new ServicesException("Failed to delete employee: " + e.getMessage(), e);
+    public void deleteEmployee(Employee employee) throws ServicesException {
+        if (employee == null || employee.getEmail() == null) {
+            throw new ServicesException("Invalid employee data for deletion.");
         }
+
+        String email = employee.getEmail();
+        // Codul real de ștergere în repository
+        employeeRepository.delete(employee.getEmail());
+        System.out.println("Deleted Employee email: " + email);
+        notifyDelete(email);
     }
+
 
     @Override
     public void updateEmployee(String email, Employee employee) throws ServicesException {
@@ -66,11 +64,19 @@ public class EmployeeServiceImpl implements IEmployeeService, IObserver<Employee
             }
 
             employeeRepository.update(email, employee);
-            notifyDelete(email);
+            notifyUpdate(employee, email);
         } catch (Exception e) {
             throw new ServicesException("Failed to update employee: " + e.getMessage(), e);
         }
     }
+
+    @Override
+    public List<Employee> getAllEmployees() throws ServicesException {
+        try {
+            return (List<Employee>) employeeRepository.getAll(); // presupunem că există această metodă
+        } catch (Exception e) {
+            throw new ServicesException("Error retrieving employees: " + e.getMessage(), e);
+        }    }
 
     public void notifyAdd(Employee employee) {
         for (IObserver<Employee, String> observer : observers) {
